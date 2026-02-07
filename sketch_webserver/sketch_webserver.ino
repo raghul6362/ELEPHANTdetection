@@ -30,8 +30,8 @@
 // ===================
 // WIFI SETTINGS
 // ===================
-const char* ssid = "RAGHUL";
-const char* password = "kavi2005";
+const char* ssid = "";
+const char* password = "";
 
 #include "esp_http_server.h"
 
