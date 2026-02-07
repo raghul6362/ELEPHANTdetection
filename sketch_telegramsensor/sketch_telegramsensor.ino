@@ -4,12 +4,12 @@
 #include <TinyGPSPlus.h>
 
 // ---------------- WIFI ----------------
-const char* ssid = "RAGHUL";
-const char* password = "kavi2005";
+const char* ssid = "";
+const char* password = "";
 
 // ---------------- TELEGRAM ----------------
-#define BOT_TOKEN "8324824961:AAGett8J0sUL8MQAQ9IJp6hf4VZQK3JwzvY"
-#define CHAT_ID   "5740323884"
+#define BOT_TOKEN ""
+#define CHAT_ID   ""
 
 // ---------------- PINS ----------------
 #define SERVO_PIN 23
