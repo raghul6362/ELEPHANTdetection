@@ -1,0 +1,119 @@
+import cv2
+import requests
+import time
+from ultralytics import YOLO
+from datetime import datetime
+
+# ===============================
+# TELEGRAM CONFIG
+# ===============================
+BOT_TOKEN = "8411577129:AAGh_2jDwyrlvn61mHm_gf1MZ2Z_vkZiLmM"
+CHAT_ID = "5740323884"
+
+# ===============================
+# ESP32-CAM STREAM
+# ===============================
+ESP32_STREAM_URL = "http://10.253.188.181"
+# ===============================
+# ALERT CONTROL
+# ===============================
+ALERT_COOLDOWN = 30  # seconds
+last_alert_time = 0
+
+# ===============================
+# LOAD YOLO MODEL
+# ===============================
+model = YOLO("yolov8n.pt")
+
+# ===============================
+# TELEGRAM FUNCTIONS
+# ===============================
+def send_message(text):
+    requests.post(
+        f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+        data={"chat_id": CHAT_ID, "text": text}
+    )
+
+def send_photo(image_path):
+    with open(image_path, "rb") as img:
+        requests.post(
+            f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto",
+            files={"photo": img},
+            data={"chat_id": CHAT_ID}
+        )
+
+# ===============================
+# CONNECT STREAM
+# ===============================
+def connect_stream():
+    cap = cv2.VideoCapture(ESP32_STREAM_URL)
+    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+    return cap
+
+cap = connect_stream()
+print("✅ Stream connected")
+
+# ===============================
+# MAIN LOOP
+# ===============================
+while True:
+    ret, frame = cap.read()
+
+    if not ret:
+        print("⚠️ Stream lost, reconnecting...")
+        cap.release()
+        time.sleep(2)
+        cap = connect_stream()
+        continue
+
+    results = model(frame, conf=0.5, verbose=False)
+    elephant_detected = False
+
+    for r in results:
+        for box in r.boxes:
+            cls = int(box.cls[0])
+            label = model.names[cls]
+            conf = float(box.conf[0])
+
+            if label.lower() == "elephant":
+                elephant_detected = True
+
+                x1, y1, x2, y2 = map(int, box.xyxy[0])
+
+                # 🔴 RED BOUNDING BOX
+                cv2.rectangle(frame, (x1, y1), (x2, y2),
+                              (0, 0, 255), 3)
+
+                # LABEL
+                cv2.putText(frame,
+                            f"ELEPHANT {conf:.2f}",
+                            (x1, y1 - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.8, (0, 0, 255), 2)
+
+    # 🔴 DRAW RED BORDER AROUND FULL FRAME
+    if elephant_detected:
+        h, w, _ = frame.shape
+        cv2.rectangle(frame, (0, 0), (w - 1, h - 1),
+                      (0, 0, 255), 6)
+
+    now = time.time()
+
+    if elephant_detected and (now - last_alert_time) >= ALERT_COOLDOWN:
+        print("🐘 ELEPHANT DETECTED – alert sent")
+
+        filename = f"elephant_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
+        cv2.imwrite(filename, frame)
+
+        send_message("🚨 ALERT: Elephant detected near the camera!")
+        send_photo(filename)
+
+        last_alert_time = now
+
+    cv2.imshow("ESP32-CAM Elephant Detection", frame)
+
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+cap.release()
+cv2.destroyAllWindows()
